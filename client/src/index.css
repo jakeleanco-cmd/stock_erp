@@ -1,0 +1,62 @@
+:root {
+  font-family: 'Noto Sans KR', 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  background-color: #f0f2f5;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+}
+
+.ant-layout-sider {
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.ant-layout-header {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  z-index: 9;
+}
+
+.summary-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease;
+}
+
+.summary-card:hover {
+  transform: translateY(-5px);
+}
+
+.ant-table {
+  background: transparent !important;
+}
+
+.ant-table-thead > tr > th {
+  background: #fafafa !important;
+  font-weight: 600 !important;
+}
+
+.ant-card {
+  border-radius: 12px !important;
+}
+
+/* 수익률 색상 강조 */
+.profit-up { color: #f5222d; }
+.profit-down { color: #096dd9; }
+
+/* 모바일 대응 */
+@media (max-width: 768px) {
+  .ant-layout-content {
+    margin: 12px 8px !important;
+    padding: 16px !important;
+  }
+}

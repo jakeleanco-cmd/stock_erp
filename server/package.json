@@ -1,0 +1,23 @@
+{
+  "name": "stock_erp_server",
+  "version": "1.0.0",
+  "description": "주식 매매 관리 서버",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.17",
+    "axios": "^1.15.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "iconv-lite": "^0.7.2",
+    "mongoose": "^8.4.0",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

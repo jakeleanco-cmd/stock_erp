@@ -1,0 +1,33 @@
+# Dependencies
+node_modules
+client/node_modules
+server/node_modules
+
+# Build
+dist
+client/dist
+.vercel
+
+# Environment & Keys
+.env
+server/.env
+client/.env
+.env.local
+.env.*.local
+.keys
+private_key.txt
+google-drive-key.json
+
+# Debug & Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode
+.idea
