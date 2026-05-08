@@ -10,6 +10,18 @@ const api = axios.create({
   timeout: 10000,
 });
 
+// 요청 인터셉터: localStorage에서 토큰을 읽어 헤더에 추가
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // 응답 인터셉터: 에러 발생 시 서버 메시지 추출
 api.interceptors.response.use(
   (response) => response.data,
@@ -98,6 +110,17 @@ export const autoTradeApi = {
   getAlerts: () => api.get('/auto-trade/alerts'),
   /** 자동매매 엔진 상태 */
   getEngineStatus: () => api.get('/auto-trade/status'),
+};
+
+// ─── 인증 관련 API ────────────────────────────────────────────
+export const authApi = {
+  /** 회원가입 */
+  register: (data) => api.post('/auth/register', data),
+  /** 로그인 */
+  login: (data) => api.post('/auth/login', data),
+  /** 내 정보 조회 */
+  getMe: () => api.get('/auth/me'),
+  updateProfile: (data) => api.put('/auth/profile', data),
 };
 
 export default api;

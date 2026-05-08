@@ -6,6 +6,12 @@ const mongoose = require('mongoose');
  */
 const sellRecordSchema = new mongoose.Schema(
   {
+    // 소유 사용자
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
     // 어떤 매입 건에서 판 것인지 (Trade 참조)
     tradeId: {
       type: mongoose.Schema.Types.ObjectId,

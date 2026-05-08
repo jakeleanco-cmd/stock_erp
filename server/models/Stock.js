@@ -6,11 +6,16 @@ const mongoose = require('mongoose');
  */
 const stockSchema = new mongoose.Schema(
   {
+    // 소유 사용자
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
     // 종목 코드 (예: 005930 = 삼성전자)
     ticker: {
       type: String,
       required: [true, '종목 코드는 필수입니다.'],
-      unique: true,
       trim: true,
     },
     // 종목명
@@ -52,5 +57,8 @@ const stockSchema = new mongoose.Schema(
     timestamps: true, // createdAt, updatedAt 자동 생성
   }
 );
+
+// 사용자별로 종목 코드가 유일하도록 인덱스 설정
+stockSchema.index({ userId: 1, ticker: 1 }, { unique: true });
 
 module.exports = mongoose.model('Stock', stockSchema);

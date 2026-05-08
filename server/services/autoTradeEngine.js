@@ -167,8 +167,8 @@ class AutoTradeEngine {
       this.alertHistory = this.alertHistory.slice(0, 50);
     }
 
-    // SSE로 알림 브로드캐스트
-    broadcastAlert(alertData);
+    // SSE로 알림 브로드캐스트 (특정 사용자에게만)
+    broadcastAlert(rule.userId, alertData);
 
     const typeLabel = rule.ruleType === 'target_sell' ? '🎯 목표 달성' : '🛑 손절 경고';
     console.log(`${typeLabel}: ${stock.name}(${stock.ticker}) | 현재가: ${currentPrice} | 수익률: ${returnRate.toFixed(2)}%`);

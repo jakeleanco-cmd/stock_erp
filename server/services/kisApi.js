@@ -1,34 +1,51 @@
 const axios = require('axios');
 const kisTokenManager = require('./kisTokenManager');
 
+/**
+ * KisApi - 한국투자증권 Open API 통신 모듈
+ * 
+ * 이제 각 메서드는 사용자별 인증 정보를 인자로 받을 수 있습니다.
+ */
 class KisApi {
   constructor() {
     this.domain = process.env.KIS_DOMAIN || 'https://openapi.koreainvestment.com:9443';
-    this.appKey = process.env.KIS_APP_KEY;
-    this.appSecret = process.env.KIS_APP_SECRET;
+  }
+
+  /**
+   * 공통 헤더 생성 유틸리티
+   */
+  async _getHeaders(credentials, trId) {
+    const appKey = credentials?.appKey || process.env.KIS_APP_KEY;
+    const appSecret = credentials?.appSecret || process.env.KIS_APP_SECRET;
+
+    if (!appKey || !appSecret) {
+      throw new Error('KIS API 인증 정보(AppKey, AppSecret)가 없습니다.');
+    }
+
+    const token = await kisTokenManager.getToken(appKey, appSecret);
+
+    return {
+      'Content-Type': 'application/json',
+      'authorization': `Bearer ${token}`,
+      'appkey': appKey,
+      'appsecret': appSecret,
+      'tr_id': trId,
+      'custtype': 'P',
+    };
   }
 
   /**
    * 한국투자증권 주식현재가 시세 API (FHKST01010100) 호출
    * @param {string} ticker 6자리 종목코드 (예: '005930')
+   * @param {Object} credentials - { appKey, appSecret } (옵션)
    * @returns {Object} 종목 정보 및 현재가 데이터
    */
-  async getStockPrice(ticker) {
-    if (!this.appKey || !this.appSecret) {
-      throw new Error('KIS API 환경변수가 설정되지 않았습니다.');
-    }
-
+  async getStockPrice(ticker, credentials = null) {
     try {
-      const token = await kisTokenManager.getToken();
+      const headers = await this._getHeaders(credentials, 'FHKST01010100');
       
       const response = await axios.get(`${this.domain}/uapi/domestic-stock/v1/quotations/inquire-price`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'authorization': `Bearer ${token}`,
-          'appkey': this.appKey,
-          'appsecret': this.appSecret,
-          'tr_id': 'FHKST01010100' // 주식현재가 시세 TR ID
-        },
+        headers,
         params: {
           fid_cond_mrkt_div_code: 'J', // 시장 분류 (J: 주식/ETF/ETN)
           fid_input_iscd: ticker       // 종목코드 (6자리)
@@ -44,9 +61,9 @@ class KisApi {
         ticker: ticker,
         currentPrice: parseInt(output.stck_prpr, 10), // 주식 현재가
         yesterdayClosePrice: parseInt(output.stck_prdy_clpr, 10), // 전일 종가
-        market: output.bstp_kor_isnm,                 // 업종/시장명 (대략적인 파악용)
-        yesterdayPrice: parseInt(output.prdy_vrss, 10), // 전일 대비
-        volume: parseInt(output.acml_vol, 10)         // 누적 거래량
+        market: output.bstp_kor_isnm,                 // 업종/시장명
+        yesterdayPrice: parseInt(output.prdy_vrss, 10),
+        volume: parseInt(output.acml_vol, 10)
       };
 
     } catch (error) {
@@ -57,46 +74,31 @@ class KisApi {
 
   /**
    * 국내주식 매도 주문 (TTTC0801U)
-   * @param {string} ticker - 종목코드 6자리
-   * @param {number} quantity - 주문 수량
-   * @param {number} price - 주문 단가 (시장가일 경우 0)
-   * @param {string} orderType - '00': 지정가, '01': 시장가
-   * @returns {Object} 주문 결과
    */
-  async sellOrder(ticker, quantity, price = 0, orderType = '01') {
-    return this._placeOrder('TTTC0801U', ticker, quantity, price, orderType);
+  async sellOrder(ticker, quantity, price = 0, orderType = '01', credentials = null) {
+    return this._placeOrder('TTTC0801U', ticker, quantity, price, orderType, credentials);
   }
 
   /**
    * 국내주식 매수 주문 (TTTC0802U)
-   * @param {string} ticker - 종목코드 6자리
-   * @param {number} quantity - 주문 수량
-   * @param {number} price - 주문 단가 (시장가일 경우 0)
-   * @param {string} orderType - '00': 지정가, '01': 시장가
-   * @returns {Object} 주문 결과
    */
-  async buyOrder(ticker, quantity, price = 0, orderType = '01') {
-    return this._placeOrder('TTTC0802U', ticker, quantity, price, orderType);
+  async buyOrder(ticker, quantity, price = 0, orderType = '01', credentials = null) {
+    return this._placeOrder('TTTC0802U', ticker, quantity, price, orderType, credentials);
   }
 
   /**
    * 주문 공통 로직
-   * 왜 분리했는가: 매수/매도는 tr_id만 다르고 나머지 로직은 동일
    */
-  async _placeOrder(trId, ticker, quantity, price, orderType) {
-    if (!this.appKey || !this.appSecret) {
-      throw new Error('KIS API 환경변수가 설정되지 않았습니다.');
-    }
-
-    const accountNo = process.env.KIS_ACCOUNT_NO;
-    const accountProduct = process.env.KIS_ACCOUNT_PRODUCT || '01';
+  async _placeOrder(trId, ticker, quantity, price, orderType, credentials) {
+    const accountNo = credentials?.accountNo || process.env.KIS_ACCOUNT_NO;
+    const accountProduct = credentials?.accountProduct || process.env.KIS_ACCOUNT_PRODUCT || '01';
 
     if (!accountNo) {
-      throw new Error('KIS_ACCOUNT_NO 환경변수가 설정되지 않았습니다.');
+      throw new Error('KIS 계좌번호가 설정되지 않았습니다.');
     }
 
     try {
-      const token = await kisTokenManager.getToken();
+      const headers = await this._getHeaders(credentials, trId);
 
       const response = await axios.post(
         `${this.domain}/uapi/domestic-stock/v1/trading/order-cash`,
@@ -108,16 +110,7 @@ class KisApi {
           ORD_QTY: String(quantity),           // 주문수량
           ORD_UNPR: String(price),            // 주문단가 (시장가면 0)
         },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'authorization': `Bearer ${token}`,
-            'appkey': this.appKey,
-            'appsecret': this.appSecret,
-            'tr_id': trId,
-            'custtype': 'P',                  // 개인
-          },
-        }
+        { headers }
       );
 
       if (response.data.rt_cd !== '0') {
@@ -129,8 +122,8 @@ class KisApi {
 
       return {
         success: true,
-        orderNo: response.data.output?.ODNO,         // 주문번호
-        orderTime: response.data.output?.ORD_TMD,     // 주문시각
+        orderNo: response.data.output?.ODNO,
+        orderTime: response.data.output?.ORD_TMD,
         message: response.data.msg1,
       };
     } catch (error) {

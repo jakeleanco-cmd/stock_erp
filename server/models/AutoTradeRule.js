@@ -11,6 +11,12 @@ const mongoose = require('mongoose');
  */
 const autoTradeRuleSchema = new mongoose.Schema(
   {
+    // 소유 사용자
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
     // 대상 종목
     stockId: {
       type: mongoose.Schema.Types.ObjectId,

@@ -10,7 +10,9 @@ exports.getTradesByStock = async (req, res) => {
   try {
     const { stockId } = req.query;
 
-    const filter = stockId ? { stockId } : {};
+    const filter = { userId: req.user.id };
+    if (stockId) filter.stockId = stockId;
+
     const trades = await Trade.find(filter)
       .populate('stockId', 'name ticker currentPrice targetReturnRate')
       .sort({ tradeDate: -1 });
@@ -55,7 +57,7 @@ exports.getTradesByStock = async (req, res) => {
  */
 exports.getTradeById = async (req, res) => {
   try {
-    const trade = await Trade.findById(req.params.id)
+    const trade = await Trade.findOne({ _id: req.params.id, userId: req.user.id })
       .populate('stockId', 'name ticker currentPrice targetReturnRate');
 
     if (!trade) {
@@ -76,13 +78,14 @@ exports.createTrade = async (req, res) => {
   try {
     const { stockId, tradeDate, quantity, buyPrice, memo } = req.body;
 
-    // 종목 존재 여부 확인
-    const stock = await Stock.findById(stockId);
+    // 종목 존재 및 소유 여부 확인
+    const stock = await Stock.findOne({ _id: stockId, userId: req.user.id });
     if (!stock) {
       return res.status(404).json({ success: false, message: '종목을 찾을 수 없습니다.' });
     }
 
     const trade = new Trade({
+      userId: req.user.id,
       stockId,
       tradeDate,
       quantity: Number(quantity),
@@ -111,7 +114,7 @@ exports.updateTrade = async (req, res) => {
   try {
     const { quantity, buyPrice, tradeDate, memo } = req.body;
 
-    const trade = await Trade.findById(req.params.id);
+    const trade = await Trade.findOne({ _id: req.params.id, userId: req.user.id });
     if (!trade) {
       return res.status(404).json({ success: false, message: '매입 이력을 찾을 수 없습니다.' });
     }
@@ -148,7 +151,7 @@ exports.updateTrade = async (req, res) => {
  */
 exports.deleteTrade = async (req, res) => {
   try {
-    const trade = await Trade.findByIdAndDelete(req.params.id);
+    const trade = await Trade.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
     if (!trade) {
       return res.status(404).json({ success: false, message: '매입 이력을 찾을 수 없습니다.' });
     }

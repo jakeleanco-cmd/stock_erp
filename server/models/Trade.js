@@ -7,6 +7,12 @@ const mongoose = require('mongoose');
  */
 const tradeSchema = new mongoose.Schema(
   {
+    // 소유 사용자
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
     // 연결된 종목
     stockId: {
       type: mongoose.Schema.Types.ObjectId,

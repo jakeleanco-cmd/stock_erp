@@ -8,6 +8,8 @@ const tradeRoutes = require('./routes/tradeRoutes');
 const sellRoutes = require('./routes/sellRoutes');
 const realtimeRoutes = require('./routes/realtimeRoutes');
 const autoTradeRoutes = require('./routes/autoTradeRoutes');
+const authRoutes = require('./routes/authRoutes');
+const { protect } = require('./middleware/authMiddleware');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -18,11 +20,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ─── API 라우터 등록 ─────────────────────────────────────────
-app.use('/api/stocks', stockRoutes);
-app.use('/api/trades', tradeRoutes);
-app.use('/api/sells', sellRoutes);
-app.use('/api/realtime', realtimeRoutes);
-app.use('/api/auto-trade', autoTradeRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/stocks', protect, stockRoutes);
+app.use('/api/trades', protect, tradeRoutes);
+app.use('/api/sells', protect, sellRoutes);
+app.use('/api/realtime', protect, realtimeRoutes);
+app.use('/api/auto-trade', protect, autoTradeRoutes);
 
 // ─── 헬스 체크 ───────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

@@ -2,54 +2,62 @@ const Stock = require('../models/Stock');
 const kisWebSocket = require('../services/kisWebSocket');
 
 /**
- * SSE(Server-Sent Events) 라우트
- * 
- * 왜 SSE인가:
- * - 클라이언트는 가격을 "수신만" 하면 됨 (단방향)
- * - Socket.io 같은 양방향 라이브러리 불필요
- * - 브라우저 내장 EventSource API로 바로 사용 가능
- * - 자동 재연결 기능 내장
+ * SSE(Server-Sent Events) 라우트 (사용자별 관리)
  */
 
-// SSE 클라이언트 목록 (연결된 모든 브라우저 세션)
-const sseClients = new Set();
+// 사용자별 SSE 클라이언트 목록 (userId -> Set of response objects)
+const sseClients = new Map();
 
-// 자동매매 알림용 SSE 클라이언트 목록
-const alertClients = new Set();
+// 사용자별 알림 SSE 클라이언트 목록 (userId -> Set of response objects)
+const alertClients = new Map();
 
 /**
  * GET /api/realtime/prices
  * 실시간 가격 SSE 스트림
- * 
- * 클라이언트가 EventSource로 연결하면,
- * KIS WebSocket에서 수신되는 가격을 실시간으로 Push
  */
 exports.priceStream = (req, res) => {
-  // SSE 헤더 설정
+  const userId = req.user.id;
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no', // Nginx 프록시 버퍼링 비활성화
+    'X-Accel-Buffering': 'no',
   });
 
-  // 초기 연결 시 현재 캐시된 가격 전체 전송
-  const latestPrices = kisWebSocket.latestPrices;
-  if (Object.keys(latestPrices).length > 0) {
-    res.write(`event: init\ndata: ${JSON.stringify(latestPrices)}\n\n`);
-  }
+  // 해당 사용자의 보유 종목만 초기 가격 전송
+  const getInitialPrices = async () => {
+    const userStocks = await Stock.find({ userId }, 'ticker');
+    const tickers = userStocks.map(s => s.ticker);
+    const latestPrices = kisWebSocket.latestPrices;
+    
+    const userPrices = {};
+    tickers.forEach(t => {
+      if (latestPrices[t]) userPrices[t] = latestPrices[t];
+    });
+
+    if (Object.keys(userPrices).length > 0) {
+      res.write(`event: init\ndata: ${JSON.stringify(userPrices)}\n\n`);
+    }
+  };
+
+  getInitialPrices();
 
   // WebSocket 연결 상태 전송
   res.write(`event: status\ndata: ${JSON.stringify({ connected: kisWebSocket.isConnected })}\n\n`);
 
   // 클라이언트 등록
-  sseClients.add(res);
-  console.log(`📺 SSE 클라이언트 연결 (총 ${sseClients.size}명)`);
+  if (!sseClients.has(userId)) {
+    sseClients.set(userId, new Set());
+  }
+  sseClients.get(userId).add(res);
 
-  // 연결 종료 시 정리
   req.on('close', () => {
-    sseClients.delete(res);
-    console.log(`📺 SSE 클라이언트 해제 (총 ${sseClients.size}명)`);
+    const clients = sseClients.get(userId);
+    if (clients) {
+      clients.delete(res);
+      if (clients.size === 0) sseClients.delete(userId);
+    }
   });
 };
 
@@ -58,6 +66,8 @@ exports.priceStream = (req, res) => {
  * 매매 신호/알림 SSE 스트림
  */
 exports.alertStream = (req, res) => {
+  const userId = req.user.id;
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -65,19 +75,24 @@ exports.alertStream = (req, res) => {
     'X-Accel-Buffering': 'no',
   });
 
-  // 연결 확인 메시지
   res.write(`event: connected\ndata: ${JSON.stringify({ message: '알림 스트림 연결됨' })}\n\n`);
 
-  alertClients.add(res);
+  if (!alertClients.has(userId)) {
+    alertClients.set(userId, new Set());
+  }
+  alertClients.get(userId).add(res);
 
   req.on('close', () => {
-    alertClients.delete(res);
+    const clients = alertClients.get(userId);
+    if (clients) {
+      clients.delete(res);
+      if (clients.size === 0) alertClients.delete(userId);
+    }
   });
 };
 
 /**
  * POST /api/realtime/subscribe
- * 특정 종목 실시간 구독 추가
  */
 exports.subscribe = (req, res) => {
   try {
@@ -95,7 +110,6 @@ exports.subscribe = (req, res) => {
 
 /**
  * DELETE /api/realtime/subscribe/:ticker
- * 특정 종목 실시간 구독 해제
  */
 exports.unsubscribe = (req, res) => {
   try {
@@ -109,25 +123,23 @@ exports.unsubscribe = (req, res) => {
 
 /**
  * GET /api/realtime/status
- * WebSocket 연결 상태 및 구독 정보 조회
  */
 exports.getStatus = (req, res) => {
   res.json({
     success: true,
     data: {
       ...kisWebSocket.getStatus(),
-      sseClientCount: sseClients.size,
+      activeUsers: sseClients.size,
     },
   });
 };
 
 /**
  * POST /api/realtime/subscribe-all
- * DB에 등록된 모든 보유 종목을 일괄 구독
  */
 exports.subscribeAll = async (req, res) => {
   try {
-    const stocks = await Stock.find({}, 'ticker');
+    const stocks = await Stock.find({ userId: req.user.id }, 'ticker');
     const tickers = stocks.map(s => s.ticker);
 
     kisWebSocket.subscribeAll(tickers);
@@ -142,62 +154,56 @@ exports.subscribeAll = async (req, res) => {
   }
 };
 
-// ─── KIS WebSocket 이벤트 → SSE 브로드캐스트 ──────────────────
+// ─── KIS WebSocket 이벤트 → 사용자별 브로드캐스트 ──────────────────
 
 /**
- * KIS WebSocket에서 가격 이벤트를 수신하면
- * 연결된 모든 SSE 클라이언트에게 브로드캐스트
+ * 가격 정보를 해당 종목을 보유한 사용자들에게만 전송
  */
-kisWebSocket.on('price', (priceData) => {
+kisWebSocket.on('price', async (priceData) => {
+  const { ticker } = priceData;
   const message = `event: price\ndata: ${JSON.stringify(priceData)}\n\n`;
 
-  for (const client of sseClients) {
+  // 이 종목을 보유한 사용자들 조회 (성능을 위해 인메모리 캐싱 고려 가능)
+  // 여기서는 단순하게 매번 DB 조회 또는 sseClients 순회
+  for (const [userId, clients] of sseClients.entries()) {
     try {
-      client.write(message);
+      const hasStock = await Stock.exists({ userId, ticker });
+      if (hasStock) {
+        clients.forEach(client => {
+          try { client.write(message); } catch (e) { clients.delete(client); }
+        });
+      }
     } catch (err) {
-      // 끊어진 클라이언트 정리
-      sseClients.delete(client);
+      console.error('SSE 전송 중 오류:', err);
     }
   }
 });
 
-// WebSocket 연결 상태 변경 시 SSE로 알림
-kisWebSocket.on('connected', () => {
-  broadcastToSSE('status', { connected: true });
-});
+// 상태 변경은 전역 브로드캐스트
+kisWebSocket.on('connected', () => broadcastToAll('status', { connected: true }));
+kisWebSocket.on('disconnected', () => broadcastToAll('status', { connected: false }));
 
-kisWebSocket.on('disconnected', () => {
-  broadcastToSSE('status', { connected: false });
-});
-
-/**
- * SSE 클라이언트들에게 이벤트 브로드캐스트 유틸리티
- */
-function broadcastToSSE(eventName, data) {
+function broadcastToAll(eventName, data) {
   const message = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const client of sseClients) {
-    try {
-      client.write(message);
-    } catch (err) {
-      sseClients.delete(client);
-    }
+  for (const clients of sseClients.values()) {
+    clients.forEach(client => {
+      try { client.write(message); } catch (e) { clients.delete(client); }
+    });
   }
 }
 
 /**
- * 알림 SSE 클라이언트들에게 알림 브로드캐스트
- * autoTradeEngine에서 호출하기 위해 export
+ * 특정 사용자에게 알림 전송
  */
-function broadcastAlert(alertData) {
+function broadcastAlert(userId, alertData) {
   const message = `event: alert\ndata: ${JSON.stringify(alertData)}\n\n`;
-  for (const client of alertClients) {
-    try {
-      client.write(message);
-    } catch (err) {
-      alertClients.delete(client);
-    }
+  const clients = alertClients.get(userId.toString());
+  if (clients) {
+    clients.forEach(client => {
+      try { client.write(message); } catch (e) { clients.delete(client); }
+    });
   }
 }
 
 exports.broadcastAlert = broadcastAlert;
-exports.broadcastToSSE = broadcastToSSE;
+exports.broadcastToAll = broadcastToAll;

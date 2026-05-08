@@ -47,12 +47,13 @@ const calcTradeMetrics = (trade, currentPrice) => {
  */
 exports.getStocks = async (req, res) => {
   try {
-    const stocks = await Stock.find().sort({ createdAt: -1 });
+    const stocks = await Stock.find({ userId: req.user.id }).sort({ createdAt: -1 });
 
     // 각 종목마다 매입 이력 요약 데이터 계산
     const stocksWithSummary = await Promise.all(
       stocks.map(async (stock) => {
         const trades = await Trade.find({
+          userId: req.user.id,
           stockId: stock._id,
           status: { $ne: 'sold' }, // 전량 매도 완료된 건 제외
         });
@@ -93,7 +94,7 @@ exports.getStocks = async (req, res) => {
  */
 exports.getStockById = async (req, res) => {
   try {
-    const stock = await Stock.findById(req.params.id);
+    const stock = await Stock.findOne({ _id: req.params.id, userId: req.user.id });
     if (!stock) {
       return res.status(404).json({ success: false, message: '종목을 찾을 수 없습니다.' });
     }
@@ -111,13 +112,14 @@ exports.createStock = async (req, res) => {
   try {
     const { ticker, name, market, currentPrice, targetReturnRate, memo } = req.body;
 
-    // 중복 종목 코드 체크
-    const existing = await Stock.findOne({ ticker: ticker.trim() });
+    // 사용자별 중복 종목 코드 체크
+    const existing = await Stock.findOne({ userId: req.user.id, ticker: ticker.trim() });
     if (existing) {
       return res.status(400).json({ success: false, message: `이미 등록된 종목 코드입니다: ${ticker}` });
     }
 
     const stock = new Stock({
+      userId: req.user.id,
       ticker: ticker.trim(),
       name: name.trim(),
       market,
@@ -150,8 +152,8 @@ exports.updateStock = async (req, res) => {
       updateData.priceUpdatedAt = new Date();
     }
 
-    const stock = await Stock.findByIdAndUpdate(
-      req.params.id,
+    const stock = await Stock.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
       updateData,
       { new: true, runValidators: true }
     );
@@ -172,13 +174,13 @@ exports.updateStock = async (req, res) => {
  */
 exports.deleteStock = async (req, res) => {
   try {
-    const stock = await Stock.findById(req.params.id);
+    const stock = await Stock.findOne({ _id: req.params.id, userId: req.user.id });
     if (!stock) {
       return res.status(404).json({ success: false, message: '종목을 찾을 수 없습니다.' });
     }
 
     // 연결된 매입 이력도 함께 삭제
-    await Trade.deleteMany({ stockId: req.params.id });
+    await Trade.deleteMany({ userId: req.user.id, stockId: req.params.id });
     await stock.deleteOne();
 
     res.json({ success: true, message: '종목과 관련 매입 이력이 삭제되었습니다.' });
@@ -199,10 +201,16 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  */
 exports.syncPrices = async (req, res) => {
   try {
-    const stocks = await Stock.find();
+    const stocks = await Stock.find({ userId: req.user.id });
     if (!stocks || stocks.length === 0) {
       return res.json({ success: true, message: '등록된 종목이 없습니다.' });
     }
+
+    const user = await require('../models/User').findById(req.user.id).select('+kisAppSecret');
+    const credentials = {
+      appKey: user.kisAppKey,
+      appSecret: user.kisAppSecret,
+    };
 
     let updatedCount = 0;
     for (const stock of stocks) {
@@ -210,7 +218,7 @@ exports.syncPrices = async (req, res) => {
         // KIS API 속도 제한(TPS)을 안전하게 피하기 위해 1초 간격으로 호출
         await sleep(1000); 
 
-        const priceData = await kisApi.getStockPrice(stock.ticker);
+        const priceData = await kisApi.getStockPrice(stock.ticker, credentials);
         // yesterdayClosePrice 필드가 있다면 이를 이용 (없으면 currentPrice fallback)
         const targetPrice = priceData.yesterdayClosePrice || priceData.currentPrice;
 

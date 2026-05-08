@@ -9,7 +9,8 @@ const Stock = require('../models/Stock');
 exports.getSellRecords = async (req, res) => {
   try {
     const { stockId } = req.query;
-    const filter = stockId ? { stockId } : {};
+    const filter = { userId: req.user.id };
+    if (stockId) filter.stockId = stockId;
 
     const records = await SellRecord.find(filter)
       .populate('stockId', 'name ticker')
@@ -31,8 +32,8 @@ exports.createSellRecord = async (req, res) => {
   try {
     const { tradeId, sellDate, quantity, sellPrice, memo } = req.body;
 
-    // 매입 건 조회
-    const trade = await Trade.findById(tradeId).populate('stockId');
+    // 매입 건 조회 (사용자 소유 확인)
+    const trade = await Trade.findOne({ _id: tradeId, userId: req.user.id }).populate('stockId');
     if (!trade) {
       return res.status(404).json({ success: false, message: '매입 이력을 찾을 수 없습니다.' });
     }
@@ -47,6 +48,7 @@ exports.createSellRecord = async (req, res) => {
 
     // 매도 기록 생성 (pre save 훅에서 수익/세금/수수료 자동 계산)
     const sellRecord = new SellRecord({
+      userId: req.user.id,
       tradeId,
       stockId: trade.stockId._id,
       sellDate,
@@ -86,13 +88,13 @@ exports.createSellRecord = async (req, res) => {
  */
 exports.deleteSellRecord = async (req, res) => {
   try {
-    const record = await SellRecord.findById(req.params.id);
+    const record = await SellRecord.findOne({ _id: req.params.id, userId: req.user.id });
     if (!record) {
       return res.status(404).json({ success: false, message: '매도 기록을 찾을 수 없습니다.' });
     }
 
     // 원래 매입 건의 수량 복구
-    const trade = await Trade.findById(record.tradeId);
+    const trade = await Trade.findOne({ _id: record.tradeId, userId: req.user.id });
     if (trade) {
       trade.remainingQuantity += record.quantity;
       // 상태 재계산
@@ -118,6 +120,7 @@ exports.deleteSellRecord = async (req, res) => {
 exports.getSellSummary = async (req, res) => {
   try {
     const summary = await SellRecord.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(req.user.id) } },
       {
         $group: {
           _id: {
@@ -149,7 +152,7 @@ exports.getStrategyByStock = async (req, res) => {
     const { stockId } = req.params;
     const targetRate = parseFloat(req.query.targetRate) || 10;
 
-    const stock = await Stock.findById(stockId);
+    const stock = await Stock.findOne({ _id: stockId, userId: req.user.id });
     if (!stock) {
       return res.status(404).json({ success: false, message: '종목을 찾을 수 없습니다.' });
     }
@@ -158,6 +161,7 @@ exports.getStrategyByStock = async (req, res) => {
 
     // 보유 중인 매입 건 목록
     const trades = await Trade.find({
+      userId: req.user.id,
       stockId,
       status: { $ne: 'sold' },
     }).sort({ buyPrice: 1 }); // 매입단가 낮은 순 (수익률 높은 순)

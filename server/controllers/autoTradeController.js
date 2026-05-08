@@ -11,7 +11,8 @@ const autoTradeEngine = require('../services/autoTradeEngine');
 exports.getRules = async (req, res) => {
   try {
     const { stockId } = req.query;
-    const filter = stockId ? { stockId } : {};
+    const filter = { userId: req.user.id };
+    if (stockId) filter.stockId = stockId;
 
     const rules = await AutoTradeRule.find(filter)
       .populate('stockId', 'name ticker currentPrice')
@@ -32,14 +33,15 @@ exports.createRule = async (req, res) => {
   try {
     const { stockId, ruleType, targetRate, executionMode, memo } = req.body;
 
-    // 종목 존재 확인
-    const stock = await Stock.findById(stockId);
+    // 종목 존재 및 소유 확인
+    const stock = await Stock.findOne({ _id: stockId, userId: req.user.id });
     if (!stock) {
       return res.status(404).json({ success: false, message: '종목을 찾을 수 없습니다.' });
     }
 
     // 같은 종목 + 같은 유형의 활성 규칙 중복 체크
     const existing = await AutoTradeRule.findOne({
+      userId: req.user.id,
       stockId,
       ruleType,
       isActive: true,
@@ -54,6 +56,7 @@ exports.createRule = async (req, res) => {
     }
 
     const rule = new AutoTradeRule({
+      userId: req.user.id,
       stockId,
       ruleType,
       targetRate,
@@ -86,8 +89,8 @@ exports.updateRule = async (req, res) => {
   try {
     const { targetRate, isActive, executionMode, memo } = req.body;
 
-    const rule = await AutoTradeRule.findByIdAndUpdate(
-      req.params.id,
+    const rule = await AutoTradeRule.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
       { targetRate, isActive, executionMode, memo },
       { new: true, runValidators: true }
     ).populate('stockId', 'name ticker');
@@ -111,7 +114,7 @@ exports.updateRule = async (req, res) => {
  */
 exports.deleteRule = async (req, res) => {
   try {
-    const rule = await AutoTradeRule.findByIdAndDelete(req.params.id);
+    const rule = await AutoTradeRule.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
     if (!rule) {
       return res.status(404).json({ success: false, message: '규칙을 찾을 수 없습니다.' });
     }
@@ -132,7 +135,7 @@ exports.deleteRule = async (req, res) => {
  */
 exports.executeRule = async (req, res) => {
   try {
-    const rule = await AutoTradeRule.findById(req.params.id).populate('stockId');
+    const rule = await AutoTradeRule.findOne({ _id: req.params.id, userId: req.user.id }).populate('stockId');
     if (!rule) {
       return res.status(404).json({ success: false, message: '규칙을 찾을 수 없습니다.' });
     }
@@ -145,6 +148,7 @@ exports.executeRule = async (req, res) => {
 
     // 보유 중인 매입 건 조회
     const trades = await Trade.find({
+      userId: req.user.id,
       stockId: stock._id,
       status: { $ne: 'sold' },
     });
@@ -156,6 +160,17 @@ exports.executeRule = async (req, res) => {
     // 조건 충족된 매입 건들을 현재가로 매도
     const currentPrice = stock.currentPrice;
     let totalSold = 0;
+
+    // 사용자 KIS 인증 정보 가져오기
+    const user = await require('../models/User').findById(req.user.id).select('+kisAppSecret');
+    const credentials = {
+      appKey: user.kisAppKey,
+      appSecret: user.kisAppSecret,
+      accountNo: user.kisAccountNo,
+      accountProduct: user.kisAccountProduct,
+    };
+
+    const kisApi = require('../services/kisApi');
 
     for (const trade of trades) {
       const returnRate = ((currentPrice - trade.buyPrice) / trade.buyPrice) * 100;
@@ -169,6 +184,7 @@ exports.executeRule = async (req, res) => {
 
       // 매도 기록 생성
       const sellRecord = new SellRecord({
+        userId: req.user.id,
         tradeId: trade._id,
         stockId: stock._id,
         sellDate: new Date(),

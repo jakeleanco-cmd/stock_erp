@@ -241,7 +241,10 @@ const useStockStore = create((set, get) => ({
     // 이미 연결 중이면 무시
     if (get().sseSource) return;
 
-    const priceSource = new EventSource('/api/realtime/prices');
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const priceSource = new EventSource(`/api/realtime/prices?token=${token}`);
 
     // 초기 연결 시 캐시된 전체 가격 수신
     priceSource.addEventListener('init', (e) => {
@@ -283,7 +286,7 @@ const useStockStore = create((set, get) => ({
     };
 
     // ─── 알림 SSE 스트림 ──────────────────────────────────────
-    const alertSource = new EventSource('/api/realtime/alerts');
+    const alertSource = new EventSource(`/api/realtime/alerts?token=${token}`);
 
     alertSource.addEventListener('alert', (e) => {
       try {
