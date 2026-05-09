@@ -52,7 +52,7 @@ const Register = () => {
             name="registerCode"
             rules={[{ required: true, message: '가입 코드를 입력해 주세요!' }]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="가입 코드 (stock1234)" />
+            <Input.Password prefix={<LockOutlined />} placeholder="가입 코드" />
           </Form.Item>
           
           <Form.Item
