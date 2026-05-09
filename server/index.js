@@ -49,7 +49,8 @@ if (isVercel) {
       await connectDB();
       next();
     } catch (err) {
-      res.status(500).json({ success: false, message: 'DB 연결 실패' });
+      // 디버깅을 위해 상세 에러 메시지를 포함 (추후 제거 권장)
+      res.status(500).json({ success: false, message: 'DB 연결 실패', error: err.message, mongoUriType: typeof process.env.MONGO_URI });
     }
   });
 }
