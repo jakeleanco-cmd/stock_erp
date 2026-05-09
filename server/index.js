@@ -33,11 +33,9 @@ let isConnected = false;
 const connectDB = async () => {
   if (isConnected) return;
   try {
-    // Vercel 환경 변수에 큰따옴표가 포함되어 저장되었을 경우를 대비해 제거
+    // Vercel 환경 변수에 큰따옴표, 작은따옴표, 양쪽 공백이 포함되어 저장되었을 경우를 대비해 철저히 제거
     let mongoUri = process.env.MONGO_URI || '';
-    if (mongoUri.startsWith('"') && mongoUri.endsWith('"')) {
-      mongoUri = mongoUri.slice(1, -1);
-    }
+    mongoUri = mongoUri.replace(/^['"]+/, '').replace(/['"]+$/, '').trim();
     
     await mongoose.connect(mongoUri);
     isConnected = true;
