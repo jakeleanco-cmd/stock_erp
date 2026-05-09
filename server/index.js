@@ -33,7 +33,13 @@ let isConnected = false;
 const connectDB = async () => {
   if (isConnected) return;
   try {
-    await mongoose.connect(process.env.MONGO_URI);
+    // Vercel 환경 변수에 큰따옴표가 포함되어 저장되었을 경우를 대비해 제거
+    let mongoUri = process.env.MONGO_URI || '';
+    if (mongoUri.startsWith('"') && mongoUri.endsWith('"')) {
+      mongoUri = mongoUri.slice(1, -1);
+    }
+    
+    await mongoose.connect(mongoUri);
     isConnected = true;
     console.log('✅ MongoDB 연결 성공');
   } catch (err) {
@@ -87,12 +93,8 @@ if (!isVercel) {
   const autoTradeEngine = require('./services/autoTradeEngine');
   const Stock = require('./models/Stock');
 
-  mongoose
-    .connect(process.env.MONGO_URI)
+  connectDB()
     .then(async () => {
-      console.log('✅ MongoDB 연결 성공');
-      isConnected = true;
-
       // KIS 종목 마스터 데이터 메모리 로드
       await kisMasterFile.loadMasterData();
 
