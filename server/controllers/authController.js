@@ -64,6 +64,7 @@ exports.login = async (req, res) => {
     res.status(500).json({
       success: false,
       message: '서버 오류가 발생했습니다.',
+      error: err.message, // 디버깅용
     });
   }
 };
