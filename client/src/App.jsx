@@ -18,6 +18,7 @@ import Strategy from './pages/Strategy';
 import Sells from './pages/Sells';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ResetPassword from './pages/ResetPassword';
 import Settings from './pages/Settings';
 import AlertCenter from './components/AlertCenter';
 import useStockStore from './store/useStockStore';
@@ -80,12 +81,13 @@ const AppLayout = () => {
     { key: '/settings', icon: <SettingOutlined />, label: <Link to="/settings">설정</Link> },
   ];
 
-  // 로그인/회원가입 페이지는 레이아웃을 다르게 처리
-  if (['/login', '/register'].includes(location.pathname)) {
+  // 로그인/회원가입/비밀번호 재설정 페이지는 레이아웃을 다르게 처리
+  if (['/login', '/register', '/reset-password'].includes(location.pathname)) {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
       </Routes>
     );
   }

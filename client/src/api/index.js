@@ -118,6 +118,8 @@ export const authApi = {
   register: (data) => api.post('/auth/register', data),
   /** 로그인 */
   login: (data) => api.post('/auth/login', data),
+  /** 비밀번호 재설정 */
+  resetPassword: (data) => api.post('/auth/reset-password', data),
   /** 내 정보 조회 */
   getMe: () => api.get('/auth/me'),
   updateProfile: (data) => api.put('/auth/profile', data),

@@ -57,6 +57,8 @@ const Login = () => {
           
           <div style={{ textAlign: 'center' }}>
             계정이 없으신가요? <Link to="/register">회원가입</Link>
+            <span style={{ margin: '0 8px', color: '#d9d9d9' }}>|</span>
+            <Link to="/reset-password">비밀번호 찾기</Link>
           </div>
         </Form>
       </Card>
