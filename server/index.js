@@ -75,12 +75,18 @@ mongoose
     // 자동매매 엔진 초기화
     await autoTradeEngine.init();
 
-    app.listen(PORT, () => {
-      console.log(`🚀 서버 실행 중: http://localhost:${PORT}`);
-    });
+    // Vercel 환경이 아닐 때만 listen 실행
+    if (process.env.NODE_ENV !== 'production') {
+      app.listen(PORT, () => {
+        console.log(`🚀 서버 실행 중: http://localhost:${PORT}`);
+      });
+    }
   })
   .catch((err) => {
     console.error('❌ MongoDB 연결 실패:', err.message);
     process.exit(1);
   });
+
+// Vercel Serverless Function을 위해 app 수출
+module.exports = app;
 
